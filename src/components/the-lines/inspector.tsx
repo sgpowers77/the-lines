@@ -46,7 +46,6 @@ export function Inspector({
     <aside
       className="fixed inset-x-0 bottom-0 z-20 flex max-h-[58vh] flex-col rounded-t-2xl border-t border-white/15 bg-black/95 backdrop-blur md:inset-x-auto md:top-4 md:right-4 md:bottom-4 md:max-h-none md:w-80 md:rounded-2xl md:border"
       aria-label={bubble ? "Edit bubble" : "Edit line"}
-      onKeyDown={(e) => e.stopPropagation()}
     >
       <header className="flex items-center justify-between border-b border-white/10 px-4 py-3">
         <p className="text-[11px] font-medium tracking-[0.2em] text-muted-foreground uppercase">
