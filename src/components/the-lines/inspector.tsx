@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { ArrowLeftRight, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,7 @@ import { IconPicker } from "./icon-picker";
 interface InspectorProps {
   board: Board;
   selection: Selection;
+  focusLabel: boolean;
   onSelect: (selection: Selection) => void;
   onUpdateBubble: (id: string, patch: Partial<Bubble>) => void;
   onUpdateLine: (id: string, patch: Partial<Line>) => void;
@@ -32,6 +34,7 @@ interface InspectorProps {
 export function Inspector({
   board,
   selection,
+  focusLabel,
   onSelect,
   onUpdateBubble,
   onUpdateLine,
@@ -61,6 +64,7 @@ export function Inspector({
             key={bubble.id}
             bubble={bubble}
             board={board}
+            focusLabel={focusLabel}
             onSelect={onSelect}
             onChange={(patch) => onUpdateBubble(bubble.id, patch)}
           />
@@ -84,17 +88,34 @@ export function Inspector({
   );
 }
 
+function focusLabelField() {
+  const node = document.getElementById("bubble-label");
+  const el = node instanceof HTMLInputElement ? node : node?.querySelector("input");
+  if (!(el instanceof HTMLInputElement)) return;
+  el.focus();
+  el.select();
+}
+
 function BubbleFields({
   bubble,
   board,
+  focusLabel,
   onSelect,
   onChange,
 }: {
   bubble: Bubble;
   board: Board;
+  focusLabel: boolean;
   onSelect: (s: Selection) => void;
   onChange: (patch: Partial<Bubble>) => void;
 }) {
+  useEffect(() => {
+    if (!focusLabel) return;
+    focusLabelField();
+    const frame = requestAnimationFrame(focusLabelField);
+    return () => cancelAnimationFrame(frame);
+  }, [focusLabel]);
+
   const connections = board.lines
     .filter((l) => l.from === bubble.id || l.to === bubble.id)
     .map((l) => ({
@@ -110,6 +131,7 @@ function BubbleFields({
           value={bubble.label}
           placeholder="Name this thought"
           maxLength={80}
+          autoFocus={focusLabel}
           onChange={(e) => onChange({ label: e.target.value })}
           className="font-serif text-base"
         />

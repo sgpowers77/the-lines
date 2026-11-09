@@ -58,6 +58,7 @@ export function TheLinesApp() {
   const [board, setBoard] = useState<Board>(initial.board);
   const [view, setView] = useState<View>(initial.view);
   const [selection, setSelection] = useState<Selection>(null);
+  const [namingId, setNamingId] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -76,7 +77,13 @@ export function TheLinesApp() {
     const bubble = createBubble(spot.x, spot.y, size);
     setBoard((b) => ({ ...b, bubbles: [...b.bubbles, bubble] }));
     setSelection({ kind: "bubble", id: bubble.id });
+    setNamingId(bubble.id);
   };
+
+  const select = useCallback((next: Selection) => {
+    setSelection(next);
+    setNamingId(null);
+  }, []);
 
   const updateBubble = (id: string, patch: Partial<Bubble>) =>
     setBoard((b) => ({ ...b, bubbles: b.bubbles.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
@@ -97,13 +104,13 @@ export function TheLinesApp() {
       );
       if (existing) {
         toast("These two are already connected.");
-        setSelection({ kind: "line", id: existing.id });
+        select({ kind: "line", id: existing.id });
         return;
       }
       const line: Line = { id: uid(), from, to, stroke: "thin" };
       setBoard((b) => ({ ...b, lines: [...b.lines, line] }));
     },
-    [board.lines],
+    [board.lines, select],
   );
 
   const requestDelete = useCallback(
@@ -124,7 +131,7 @@ export function TheLinesApp() {
               bubbles: b.bubbles.filter((x) => x.id !== sel.id),
               lines: b.lines.filter((l) => l.from !== sel.id && l.to !== sel.id),
             }));
-            setSelection(null);
+            select(null);
           },
         });
       } else {
@@ -138,12 +145,12 @@ export function TheLinesApp() {
           actionLabel: "Delete line",
           onConfirm: () => {
             setBoard((b) => ({ ...b, lines: b.lines.filter((l) => l.id !== sel.id) }));
-            setSelection(null);
+            select(null);
           },
         });
       }
     },
-    [board],
+    [board, select],
   );
 
   useEffect(() => {
@@ -155,12 +162,12 @@ export function TheLinesApp() {
         e.preventDefault();
         requestDelete(selection);
       } else if (e.key === "Escape") {
-        setSelection(null);
+        select(null);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [confirm, selection, requestDelete]);
+  }, [confirm, selection, requestDelete, select]);
 
   const zoomBy = (factor: number) => {
     const cx = window.innerWidth / 2;
@@ -173,7 +180,7 @@ export function TheLinesApp() {
 
   const replaceBoard = (next: Board) => {
     setBoard(next);
-    setSelection(null);
+    select(null);
     setView(fitView(next));
   };
 
@@ -226,7 +233,7 @@ export function TheLinesApp() {
         view={view}
         onViewChange={setView}
         selection={selection}
-        onSelect={setSelection}
+        onSelect={select}
         onMoveBubble={moveBubble}
         onConnect={connect}
         onAddAt={(x, y) => addBubble("md", { x, y })}
@@ -347,7 +354,8 @@ export function TheLinesApp() {
       <Inspector
         board={board}
         selection={selection}
-        onSelect={setSelection}
+        focusLabel={selection?.kind === "bubble" && selection.id === namingId}
+        onSelect={select}
         onUpdateBubble={updateBubble}
         onUpdateLine={updateLine}
         onRequestDelete={requestDelete}
