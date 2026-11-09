@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, Maximize, Minus, Plus, Trash2, Upload } from "lucide-react";
+import { Menu } from "@base-ui/react/menu";
+import { Download, ImageDown, Maximize, Minus, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   type Board,
@@ -23,6 +24,7 @@ import {
   saveBoard,
   uid,
 } from "@/lib/board";
+import { downloadBoardImage, type ImageFormat } from "@/lib/export-board";
 import { Canvas, clampZoom } from "./canvas";
 import { ConfirmDialog, type ConfirmRequest } from "./confirm-dialog";
 import { Inspector } from "./inspector";
@@ -184,6 +186,16 @@ export function TheLinesApp() {
     setView(fitView(next));
   };
 
+  const exportImage = async (format: ImageFormat) => {
+    try {
+      await downloadBoardImage(board, format);
+    } catch (err) {
+      toast.error("Couldn't export the image", {
+        description: err instanceof Error ? err.message : "Something went wrong.",
+      });
+    }
+  };
+
   const exportBoard = () => {
     const blob = new Blob([JSON.stringify(board, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -297,6 +309,7 @@ export function TheLinesApp() {
           <IconAction label="Export board as JSON" onClick={exportBoard} disabled={isEmpty}>
             <Download />
           </IconAction>
+          <ImageExport disabled={isEmpty} onExport={exportImage} />
           <IconAction label="Import a board" onClick={() => fileRef.current?.click()}>
             <Upload />
           </IconAction>
@@ -378,6 +391,48 @@ function SizeGlyph({ size }: { size: BubbleSize }) {
     <svg viewBox="0 0 20 20" className="size-4" aria-hidden>
       <circle cx="10" cy="10" r={r} fill="black" stroke="currentColor" strokeWidth="1.5" />
     </svg>
+  );
+}
+
+function ImageExport({
+  disabled,
+  onExport,
+}: {
+  disabled: boolean;
+  onExport: (format: ImageFormat) => void;
+}) {
+  return (
+    <Menu.Root>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Menu.Trigger
+              className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
+              disabled={disabled}
+              aria-label="Export image"
+            />
+          }
+        >
+          <ImageDown />
+        </TooltipTrigger>
+        <TooltipContent>Export image</TooltipContent>
+      </Tooltip>
+      <Menu.Portal>
+        <Menu.Positioner side="top" sideOffset={8} align="start" className="z-50">
+          <Menu.Popup className="min-w-32 rounded-xl border border-white/10 bg-black/95 p-1 text-white shadow-[0_12px_40px_rgba(0,0,0,0.45)] outline-none backdrop-blur">
+            {(["png", "svg", "pdf"] as const).map((format) => (
+              <Menu.Item
+                key={format}
+                onClick={() => onExport(format)}
+                className="flex cursor-default items-center rounded-lg px-3 py-2 text-xs tracking-[0.18em] text-white/80 uppercase outline-none data-[highlighted]:bg-white/10 data-[highlighted]:text-white"
+              >
+                {format}
+              </Menu.Item>
+            ))}
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
   );
 }
 

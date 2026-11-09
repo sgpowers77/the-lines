@@ -10,6 +10,7 @@ import {
   radiusOf,
   strokeAttrs,
 } from "@/lib/board";
+import { bubbleLabelLines, labelFontSize } from "@/lib/label";
 import { IconByName } from "./lucide";
 
 const DRAG_THRESHOLD = 4;
@@ -414,31 +415,9 @@ export function Canvas({
   );
 }
 
-function wrapLabel(text: string, maxChars: number, maxLines: number) {
-  const words = text.trim().split(/\s+/);
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    const next = current ? `${current} ${word}` : word;
-    if (next.length > maxChars && current) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = next;
-    }
-  }
-  if (current) lines.push(current);
-  if (lines.length > maxLines) {
-    const kept = lines.slice(0, maxLines);
-    kept[maxLines - 1] = kept[maxLines - 1].replace(/\s*\S{0,3}$/, "") + "…";
-    return kept;
-  }
-  return lines.map((l) => (l.length > maxChars + 6 ? l.slice(0, maxChars + 5) + "…" : l));
-}
-
 function BubbleLabel({ text, radius, size }: { text: string; radius: number; size: Bubble["size"] }) {
-  const fontSize = size === "xl" ? 20 : size === "lg" ? 18 : 16;
-  const lines = wrapLabel(text, size === "sm" ? 14 : 20, 3);
+  const fontSize = labelFontSize(size);
+  const lines = bubbleLabelLines(text, size);
   return (
     <text
       y={radius + fontSize + 6}
