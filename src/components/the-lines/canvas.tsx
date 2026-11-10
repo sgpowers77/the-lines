@@ -282,7 +282,11 @@ export function Canvas({
             const pa = positionOf(a);
             const pb = positionOf(b);
             const selected = selection?.kind === "line" && selection.id === line.id;
+            const linked =
+              selection?.kind === "bubble" && (line.from === selection.id || line.to === selection.id);
             const attrs = strokeAttrs(line.stroke);
+            const width = linked ? Math.max(attrs.strokeWidth + 1.75, attrs.strokeWidth * 1.7) : attrs.strokeWidth;
+            const dimmed = selection?.kind === "bubble" && !linked;
             return (
               <g key={line.id} data-line-id={line.id} className="cursor-pointer">
                 <line
@@ -293,15 +297,15 @@ export function Canvas({
                   stroke="transparent"
                   strokeWidth={lineHit}
                 />
-                {selected && (
+                {(selected || linked) && (
                   <line
                     x1={pa.x}
                     y1={pa.y}
                     x2={pb.x}
                     y2={pb.y}
                     stroke="white"
-                    strokeOpacity={0.16}
-                    strokeWidth={attrs.strokeWidth + 10}
+                    strokeOpacity={selected ? 0.16 : 0.2}
+                    strokeWidth={width + (selected ? 10 : 7)}
                     strokeLinecap="round"
                   />
                 )}
@@ -311,12 +315,26 @@ export function Canvas({
                   x2={pb.x}
                   y2={pb.y}
                   stroke="white"
-                  strokeOpacity={selected ? 1 : 0.82}
-                  strokeWidth={attrs.strokeWidth}
+                  strokeOpacity={linked || selected ? 1 : dimmed ? 0.28 : 0.82}
+                  strokeWidth={width}
                   strokeDasharray={attrs.strokeDasharray}
                   strokeLinecap="round"
-                  className="pointer-events-none"
+                  className="pointer-events-none transition-[stroke-width,stroke-opacity] duration-300"
                 />
+                {linked && (
+                  <line
+                    x1={pa.x}
+                    y1={pa.y}
+                    x2={pb.x}
+                    y2={pb.y}
+                    stroke="white"
+                    strokeOpacity={0.7}
+                    strokeWidth={Math.max(1.25, width * 0.45)}
+                    strokeDasharray="2 8"
+                    strokeLinecap="round"
+                    className="pointer-events-none animate-[line-march_2.4s_linear_infinite]"
+                  />
+                )}
               </g>
             );
           })}
