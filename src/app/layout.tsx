@@ -29,6 +29,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#000000",
+  // Let the layout shrink with the on-screen keyboard so the editor can sit above it.
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

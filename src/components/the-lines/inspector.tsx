@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeftRight, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,15 +40,54 @@ export function Inspector({
   onUpdateLine,
   onRequestDelete,
 }: InspectorProps) {
-  if (!selection) return null;
-  const bubble = selection.kind === "bubble" ? board.bubbles.find((b) => b.id === selection.id) : undefined;
-  const line = selection.kind === "line" ? board.lines.find((l) => l.id === selection.id) : undefined;
-  if (!bubble && !line) return null;
+  const panelRef = useRef<HTMLElement>(null);
+  const [textActive, setTextActive] = useState(false);
+  const inset = useKeyboardInset(textActive);
+  const bubble = selection?.kind === "bubble" ? board.bubbles.find((b) => b.id === selection.id) : undefined;
+  const line = selection?.kind === "line" ? board.lines.find((l) => l.id === selection.id) : undefined;
+
+  useEffect(() => {
+    if (!textActive || inset <= 0) return;
+    const scroller = panelRef.current?.querySelector<HTMLElement>("[data-editor-scroll]");
+    const active = document.activeElement;
+    if (!(scroller instanceof HTMLElement) || !(active instanceof HTMLElement) || !scroller.contains(active)) return;
+    const frame = requestAnimationFrame(() => scrollFieldIntoView(active, scroller));
+    return () => cancelAnimationFrame(frame);
+  }, [textActive, inset, selection]);
+
+  if (!selection || (!bubble && !line)) return null;
+
+  const lifted = inset > 0;
 
   return (
     <aside
+      ref={panelRef}
       className="fixed inset-x-0 bottom-0 z-20 flex max-h-[58vh] flex-col rounded-t-2xl border-t border-white/15 bg-black/95 backdrop-blur md:inset-x-auto md:top-4 md:right-4 md:bottom-4 md:max-h-none md:w-80 md:rounded-2xl md:border"
+      style={
+        lifted
+          ? {
+              bottom: inset,
+              maxHeight: Math.max(220, Math.round((window.visualViewport?.height ?? window.innerHeight) - 8)),
+            }
+          : undefined
+      }
       aria-label={bubble ? "Edit bubble" : "Edit line"}
+      onFocus={(event) => {
+        const target = event.target;
+        if (target instanceof HTMLElement && target.closest("input, textarea")) setTextActive(true);
+      }}
+      onBlur={(event) => {
+        const next = event.relatedTarget;
+        if (next instanceof HTMLElement && panelRef.current?.contains(next) && next.closest("input, textarea")) return;
+        window.setTimeout(() => {
+          const active = document.activeElement;
+          const stillTyping =
+            active instanceof HTMLElement &&
+            panelRef.current?.contains(active) &&
+            active.closest("input, textarea");
+          if (!stillTyping) setTextActive(false);
+        }, 60);
+      }}
     >
       <header className="flex items-center justify-between border-b border-white/10 px-4 py-3">
         <p className="text-[11px] font-medium tracking-[0.2em] text-muted-foreground uppercase">
@@ -58,7 +97,7 @@ export function Inspector({
           <X />
         </Button>
       </header>
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div data-editor-scroll className="flex-1 overflow-y-auto px-4 py-4">
         {bubble && (
           <BubbleFields
             key={bubble.id}
@@ -316,4 +355,46 @@ function StrokePicker({ value, onChange }: { value: StrokeStyle; onChange: (s: S
       onChange={(v) => onChange(v as StrokeStyle)}
     />
   );
+}
+
+/** Height of the on-screen keyboard on a phone, or 0 when it isn't covering the page. */
+function useKeyboardInset(active: boolean) {
+  const [inset, setInset] = useState(0);
+
+  useEffect(() => {
+    if (!active) return;
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const mobile = window.matchMedia("(max-width: 767px)");
+    const update = () => {
+      if (!mobile.matches) {
+        setInset(0);
+        return;
+      }
+      const covered = Math.round(window.innerHeight - viewport.height - viewport.offsetTop);
+      // Ignore the small shift from the browser chrome. A keyboard is much taller.
+      setInset(covered > 80 ? covered : 0);
+    };
+    update();
+    viewport.addEventListener("resize", update);
+    viewport.addEventListener("scroll", update);
+    mobile.addEventListener("change", update);
+    return () => {
+      viewport.removeEventListener("resize", update);
+      viewport.removeEventListener("scroll", update);
+      mobile.removeEventListener("change", update);
+    };
+  }, [active]);
+
+  return active ? inset : 0;
+}
+
+function scrollFieldIntoView(field: HTMLElement, scroller: HTMLElement) {
+  const fieldRect = field.getBoundingClientRect();
+  const scrollerRect = scroller.getBoundingClientRect();
+  if (fieldRect.bottom > scrollerRect.bottom - 12) {
+    scroller.scrollTop += fieldRect.bottom - scrollerRect.bottom + 16;
+  } else if (fieldRect.top < scrollerRect.top + 12) {
+    scroller.scrollTop -= scrollerRect.top - fieldRect.top + 16;
+  }
 }
