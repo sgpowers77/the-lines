@@ -334,7 +334,7 @@ export function TheLinesApp() {
         <p className="pointer-events-none fixed right-4 bottom-5 z-10 hidden text-right text-xs leading-relaxed text-white/40 lg:block">
           Drop a bubble onto another to draw a line
           <br />
-          Double-click empty space to add · Scroll to zoom · Drag to pan
+          Double-click empty space to add · Pinch or scroll to zoom · Drag to pan
         </p>
       )}
 

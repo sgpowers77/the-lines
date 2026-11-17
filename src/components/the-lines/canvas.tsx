@@ -16,6 +16,7 @@ import { IconByName } from "./lucide";
 const DRAG_THRESHOLD = 4;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 3;
+const MIN_PINCH_PX = 8;
 
 type Point = { x: number; y: number };
 
@@ -59,6 +60,23 @@ export function clampZoom(k: number) {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, k));
 }
 
+type Pinch = {
+  startDist: number;
+  startK: number;
+  worldX: number;
+  worldY: number;
+};
+
+/** Two touches on the board: midpoint and the distance between them. */
+function pinchMeasure(touches: TouchList) {
+  const a = touches[0];
+  const b = touches[1];
+  return {
+    mid: { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 },
+    dist: Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY),
+  };
+}
+
 export function Canvas({
   board,
   view,
@@ -71,7 +89,9 @@ export function Canvas({
 }: CanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const gesture = useRef<Gesture | null>(null);
+  const pinchRef = useRef<Pinch | null>(null);
   const viewRef = useRef(view);
+  const onViewChangeRef = useRef(onViewChange);
   const [drag, setDragState] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const setDrag = (d: DragState | null) => {
@@ -85,6 +105,15 @@ export function Canvas({
   useEffect(() => {
     viewRef.current = view;
   }, [view]);
+
+  useEffect(() => {
+    onViewChangeRef.current = onViewChange;
+  }, [onViewChange]);
+
+  const publishView = (next: View) => {
+    viewRef.current = next;
+    onViewChangeRef.current(next);
+  };
 
   const toWorld = useCallback((clientX: number, clientY: number): Point => {
     const rect = svgRef.current!.getBoundingClientRect();
@@ -104,11 +133,13 @@ export function Canvas({
       // Trackpad pinch arrives as ctrl+wheel with small deltas; scale it up to feel natural.
       const intensity = e.ctrlKey ? 0.01 : 0.0015;
       const k = clampZoom(v.k * Math.exp(-e.deltaY * intensity));
-      onViewChange({ k, x: cx - ((cx - v.x) * k) / v.k, y: cy - ((cy - v.y) * k) / v.k });
+      const next = { k, x: cx - ((cx - v.x) * k) / v.k, y: cy - ((cy - v.y) * k) / v.k };
+      viewRef.current = next;
+      onViewChangeRef.current(next);
     };
     svg.addEventListener("wheel", onWheel, { passive: false });
     return () => svg.removeEventListener("wheel", onWheel);
-  }, [onViewChange]);
+  }, []);
 
   const byId = new Map(board.bubbles.map((b) => [b.id, b]));
 
@@ -136,7 +167,82 @@ export function Canvas({
     requestAnimationFrame(step);
   };
 
+  const stopPointerGesture = () => {
+    const g = gesture.current;
+    if (!g) return;
+    gesture.current = null;
+    setPanning(false);
+    const svg = svgRef.current;
+    if (svg?.hasPointerCapture(g.pointerId)) svg.releasePointerCapture(g.pointerId);
+    if (g.type !== "bubble" || !g.moved) return;
+    const current = dragRef.current;
+    setDrag(null);
+    if (current) animateReturn(g.id, current, g.origin);
+  };
+  const stopPointerGestureRef = useRef(stopPointerGesture);
+  useEffect(() => {
+    stopPointerGestureRef.current = stopPointerGesture;
+  });
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const beginPinch = (touches: TouchList) => {
+      stopPointerGestureRef.current();
+      const { mid, dist } = pinchMeasure(touches);
+      const v = viewRef.current;
+      const rect = svg.getBoundingClientRect();
+      const cx = mid.x - rect.left;
+      const cy = mid.y - rect.top;
+      pinchRef.current = {
+        startDist: Math.max(dist, MIN_PINCH_PX),
+        startK: v.k,
+        worldX: (cx - v.x) / v.k,
+        worldY: (cy - v.y) / v.k,
+      };
+    };
+
+    const movePinch = (touches: TouchList) => {
+      const pinch = pinchRef.current;
+      if (!pinch) return;
+      const { mid, dist } = pinchMeasure(touches);
+      const rect = svg.getBoundingClientRect();
+      const cx = mid.x - rect.left;
+      const cy = mid.y - rect.top;
+      const k = clampZoom(pinch.startK * (dist / pinch.startDist));
+      publishView({ k, x: cx - pinch.worldX * k, y: cy - pinch.worldY * k });
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.targetTouches.length !== 2) return;
+      e.preventDefault();
+      beginPinch(e.targetTouches);
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!pinchRef.current || e.targetTouches.length !== 2) return;
+      e.preventDefault();
+      movePinch(e.targetTouches);
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.targetTouches.length >= 2) return;
+      pinchRef.current = null;
+    };
+
+    svg.addEventListener("touchstart", onTouchStart, { passive: false });
+    svg.addEventListener("touchmove", onTouchMove, { passive: false });
+    svg.addEventListener("touchend", onTouchEnd);
+    svg.addEventListener("touchcancel", onTouchEnd);
+    return () => {
+      svg.removeEventListener("touchstart", onTouchStart);
+      svg.removeEventListener("touchmove", onTouchMove);
+      svg.removeEventListener("touchend", onTouchEnd);
+      svg.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, []);
+
   const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (pinchRef.current) return;
     if (e.button !== 0 && e.button !== 1) return;
     if (gesture.current) return;
     const target = e.target as Element;
@@ -174,6 +280,7 @@ export function Canvas({
   };
 
   const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (pinchRef.current) return;
     const g = gesture.current;
     if (!g || g.pointerId !== e.pointerId) return;
     const dx = e.clientX - g.startClient.x;
@@ -183,7 +290,7 @@ export function Canvas({
 
     if (g.type === "pan") {
       setPanning(true);
-      onViewChange({ ...g.startView, x: g.startView.x + dx, y: g.startView.y + dy });
+      publishView({ ...g.startView, x: g.startView.x + dx, y: g.startView.y + dy });
       return;
     }
 
@@ -200,6 +307,7 @@ export function Canvas({
   };
 
   const endGesture = (e: React.PointerEvent<SVGSVGElement>, cancelled: boolean) => {
+    if (pinchRef.current) return;
     const g = gesture.current;
     if (!g || g.pointerId !== e.pointerId) return;
     gesture.current = null;
