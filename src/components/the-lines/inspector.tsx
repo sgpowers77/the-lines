@@ -45,6 +45,13 @@ export function Inspector({
   const inset = useKeyboardInset(textActive);
   const bubble = selection?.kind === "bubble" ? board.bubbles.find((b) => b.id === selection.id) : undefined;
   const line = selection?.kind === "line" ? board.lines.find((l) => l.id === selection.id) : undefined;
+  const group =
+    selection?.kind === "bubbles"
+      ? selection.ids.flatMap((id) => {
+          const match = board.bubbles.find((b) => b.id === id);
+          return match ? [match] : [];
+        })
+      : [];
 
   useEffect(() => {
     if (!textActive || inset <= 0) return;
@@ -55,7 +62,7 @@ export function Inspector({
     return () => cancelAnimationFrame(frame);
   }, [textActive, inset, selection]);
 
-  if (!selection || (!bubble && !line)) return null;
+  if (!selection || (!bubble && !line && group.length === 0)) return null;
 
   const lifted = inset > 0;
 
@@ -71,7 +78,7 @@ export function Inspector({
             }
           : undefined
       }
-      aria-label={bubble ? "Edit bubble" : "Edit line"}
+      aria-label={bubble ? "Edit bubble" : group.length > 0 ? "Edit selection" : "Edit line"}
       onFocus={(event) => {
         const target = event.target;
         if (target instanceof HTMLElement && target.closest("input, textarea")) setTextActive(true);
@@ -91,7 +98,7 @@ export function Inspector({
     >
       <header className="flex items-center justify-between border-b border-white/10 px-4 py-3">
         <p className="text-[11px] font-medium tracking-[0.2em] text-muted-foreground uppercase">
-          {bubble ? "Bubble" : "Line"}
+          {bubble ? "Bubble" : group.length > 0 ? `${group.length} bubbles` : "Line"}
         </p>
         <Button variant="ghost" size="icon-sm" onClick={() => onSelect(null)} aria-label="Close editor">
           <X />
@@ -116,11 +123,26 @@ export function Inspector({
             onChange={(patch) => onUpdateLine(line.id, patch)}
           />
         )}
+        {group.length > 0 && (
+          <ul className="space-y-1">
+            {group.map((item) => (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect({ kind: "bubble", id: item.id })}
+                  className="flex w-full items-center rounded-md px-2 py-1.5 text-left font-serif text-base hover:bg-white/5"
+                >
+                  <span className="truncate">{bubbleTitle(item)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       <footer className="border-t border-white/10 px-4 py-3">
         <Button variant="destructive" className="w-full" onClick={() => onRequestDelete(selection)}>
           <Trash2 />
-          Delete {bubble ? "bubble" : "line"}
+          Delete {bubble ? "bubble" : group.length > 0 ? "bubbles" : "line"}
         </Button>
       </footer>
     </aside>

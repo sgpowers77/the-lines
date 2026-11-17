@@ -99,6 +99,17 @@ export function TheLinesApp() {
     [],
   );
 
+  const moveBubbles = useCallback((moves: { id: string; x: number; y: number }[]) => {
+    const next = new Map(moves.map((move) => [move.id, move]));
+    setBoard((b) => ({
+      ...b,
+      bubbles: b.bubbles.map((s) => {
+        const move = next.get(s.id);
+        return move ? { ...s, x: move.x, y: move.y } : s;
+      }),
+    }));
+  }, []);
+
   const connect = useCallback(
     (from: string, to: string) => {
       const existing = board.lines.find(
@@ -132,6 +143,26 @@ export function TheLinesApp() {
             setBoard((b) => ({
               bubbles: b.bubbles.filter((x) => x.id !== sel.id),
               lines: b.lines.filter((l) => l.from !== sel.id && l.to !== sel.id),
+            }));
+            select(null);
+          },
+        });
+      } else if (sel.kind === "bubbles") {
+        const ids = new Set(sel.ids);
+        const count = board.bubbles.filter((b) => ids.has(b.id)).length;
+        if (count === 0) return;
+        const lineCount = board.lines.filter((l) => ids.has(l.from) || ids.has(l.to)).length;
+        setConfirm({
+          title: `Delete these ${count} bubbles?`,
+          description:
+            lineCount > 0
+              ? `These bubbles and ${lineCount} ${lineCount === 1 ? "line" : "lines"} will be removed. This can't be undone.`
+              : "These bubbles will be removed. This can't be undone.",
+          actionLabel: "Delete bubbles",
+          onConfirm: () => {
+            setBoard((b) => ({
+              bubbles: b.bubbles.filter((x) => !ids.has(x.id)),
+              lines: b.lines.filter((l) => !ids.has(l.from) && !ids.has(l.to)),
             }));
             select(null);
           },
@@ -247,6 +278,7 @@ export function TheLinesApp() {
         selection={selection}
         onSelect={select}
         onMoveBubble={moveBubble}
+        onMoveBubbles={moveBubbles}
         onConnect={connect}
         onAddAt={(x, y) => addBubble("md", { x, y })}
       />
@@ -334,7 +366,7 @@ export function TheLinesApp() {
         <p className="pointer-events-none fixed right-4 bottom-5 z-10 hidden text-right text-xs leading-relaxed text-white/40 lg:block">
           Drop a bubble onto another to draw a line
           <br />
-          Double-click empty space to add · Pinch or scroll to zoom · Drag to pan
+          Drag empty space to select · Space-drag to pan · Pinch or scroll to zoom
         </p>
       )}
 

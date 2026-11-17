@@ -32,8 +32,22 @@ export interface Board {
 
 export type Selection =
   | { kind: "bubble"; id: string }
+  | { kind: "bubbles"; ids: string[] }
   | { kind: "line"; id: string }
   | null;
+
+export function selectedBubbleIds(selection: Selection): string[] {
+  if (selection?.kind === "bubble") return [selection.id];
+  if (selection?.kind === "bubbles") return selection.ids;
+  return [];
+}
+
+/** One bubble opens the editor. Two or more stay a group. */
+export function selectionFromIds(ids: string[]): Selection {
+  if (ids.length === 0) return null;
+  if (ids.length === 1) return { kind: "bubble", id: ids[0] };
+  return { kind: "bubbles", ids };
+}
 
 export const SIZES: { value: BubbleSize; label: string; radius: number }[] = [
   { value: "sm", label: "Sm", radius: 26 },
